@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inforcer Nordic Run</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+        canvas {
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0, 150, 255, 0.3);
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        #ui-overlay > * { pointer-events: auto; }
+
+        /* Title Screen */
+        #titleScreen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #0b1628 0%, #1a2744 40%, #2d4a7a 100%);
+            border-radius: 12px;
+        }
+        #titleScreen h1 {
+            font-size: 52px;
+            color: #fff;
+            text-shadow: 0 0 20px #00aaff, 0 0 40px #0066cc, 0 4px 8px rgba(0,0,0,0.5);
+            margin-bottom: 5px;
+            letter-spacing: 3px;
+        }
+        #titleScreen .subtitle {
+            font-size: 18px;
+            color: #88bbee;
+            margin-bottom: 30px;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+        }
+        .brand-logo {
+            font-size: 14px;
+            color: #5588bb;
+            margin-bottom: 30px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+        .btn {
+            padding: 15px 50px;
+            font-size: 20px;
+            border: 2px solid #00aaff;
+            background: rgba(0, 100, 200, 0.2);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin: 8px;
+        }
+        .btn:hover {
+            background: rgba(0, 150, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.4);
+            transform: scale(1.05);
+        }
+        .btn-small {
+            padding: 10px 30px;
+            font-size: 14px;
+        }
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+        /* Character Select */
+        #charSelect, #shopScreen, #leaderboardScreen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #0b1628 0%, #1a2744 40%, #2d4a7a 100%);
+            border-radius: 12px;
+            overflow-y: auto;
+        }
+        #charSelect h2, #shopScreen h2, #leaderboardScreen h2 {
+            font-size: 32px;
+            color: #fff;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00aaff;
+        }
+        .char-grid { display: flex; gap: 20px; margin-bottom: 20px; }
+        .char-card {
+            width: 200px;
+            padding: 20px;
+            border: 2px solid #335577;
+            border-radius: 12px;
+            background: rgba(20, 40, 70, 0.8);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .char-card:hover, .char-card.selected {
+            border-color: #00aaff;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.3);
+            transform: translateY(-5px);
+        }
+        .char-card.selected { background: rgba(0, 80, 160, 0.3); }
+        .char-avatar { width: 100px; height: 120px; margin: 0 auto 15px; border-radius: 8px; }
+        .char-card h3 { color: #fff; font-size: 16px; margin-bottom: 8px; }
+        .char-card p { color: #88aacc; font-size: 12px; line-height: 1.4; }
+        .char-stat { display: flex; justify-content: space-between; color: #aaccee; font-size: 11px; margin-top: 4px; align-items: center; }
+        .stat-bar { width: 60px; height: 6px; background: #1a2744; border-radius: 3px; overflow: hidden; }
+        .stat-fill { height: 100%; background: linear-gradient(90deg, #00aaff, #00ddff); border-radius: 3px; }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            padding: 15px 20px;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .hud-score { color: #fff; font-size: 28px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .hud-coins { color: #ffdd44; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .hud-distance { color: #aaccee; font-size: 13px; }
+        .hud-combo { color: #00ff88; font-size: 14px; font-weight: bold; }
+        .hud-right { text-align: right; }
+        .hud-multiplier { color: #00ff88; font-size: 16px; }
+        .santa-meter { width: 150px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        .santa-fill { height: 100%; background: linear-gradient(90deg, #ff4444, #ff0000); border-radius: 4px; transition: width 0.3s; }
+        .santa-label { color: #ff6666; font-size: 11px; margin-top: 2px; }
+        #hud-center {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 6px;
+        }
+        .powerup-icon {
+            width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; border: 2px solid rgba(255,255,255,0.5); position: relative;
+        }
+        .powerup-icon .timer-ring {
+            position: absolute; top: -2px; left: -2px; width: 32px; height: 32px;
+        }
+        #muteBtn {
+            position: absolute; top: 12px; right: 180px;
+            background: rgba(0,0,0,0.4); border: 1px solid #335577; color: #fff;
+            border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #pauseOverlay {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(10,10,30,0.85); display:none; flex-direction:column;
+            align-items:center; justify-content:center; border-radius:12px;
+        }
+        #pauseOverlay h2 { color:#fff; font-size:40px; margin-bottom:20px; text-shadow: 0 0 15px #00aaff; }
+        #pauseOverlay p { color:#88aacc; font-size:14px; margin-bottom:20px; }
+
+        /* Zone announcement */
+        #zoneAnnounce {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            color: #fff; font-size: 36px; font-weight: bold; text-shadow: 0 0 20px #00aaff, 0 0 40px #0066cc;
+            pointer-events: none; opacity: 0; transition: opacity 0.5s;
+            letter-spacing: 4px; text-transform: uppercase;
+        }
+
+        /* Game Over */
+        #gameOver {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(10, 10, 30, 0.9); border-radius: 12px;
+        }
+        #gameOver h2 { font-size: 48px; color: #ff4444; text-shadow: 0 0 20px #ff0000; margin-bottom: 10px; }
+        #gameOver .caught-text { color: #ff8888; font-size: 18px; margin-bottom: 20px; }
+        .final-score { color: #fff; font-size: 36px; margin-bottom: 5px; }
+        .final-details { color: #88aacc; font-size: 14px; margin-bottom: 5px; }
+        .high-score { color: #ffdd44; font-size: 16px; margin-bottom: 20px; }
+
+        /* Shop */
+        .shop-wallet { color: #ffdd44; font-size: 20px; margin-bottom: 20px; }
+        .shop-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 20px; max-width: 700px; }
+        .shop-item {
+            width: 155px; padding: 14px; border: 2px solid #335577; border-radius: 10px;
+            background: rgba(20,40,70,0.8); text-align: center; cursor: pointer; transition: all 0.3s;
+        }
+        .shop-item:hover { border-color: #00aaff; transform: translateY(-3px); }
+        .shop-item.owned { border-color: #00ff88; opacity: 0.7; }
+        .shop-item .icon { font-size: 28px; margin-bottom: 6px; }
+        .shop-item h4 { color: #fff; font-size: 13px; margin-bottom: 4px; }
+        .shop-item p { color: #88aacc; font-size: 11px; line-height: 1.3; margin-bottom: 6px; }
+        .shop-item .price { color: #ffdd44; font-size: 14px; font-weight: bold; }
+
+        /* Leaderboard */
+        .lb-table { width: 500px; border-collapse: collapse; margin-bottom: 20px; }
+        .lb-table th { color: #88aacc; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; padding: 8px; border-bottom: 1px solid #335577; }
+        .lb-table td { color: #fff; font-size: 16px; padding: 10px 8px; border-bottom: 1px solid #1a2744; text-align: center; }
+        .lb-table tr:first-child td { color: #ffdd44; font-size: 18px; }
+        .lb-empty { color: #556688; font-size: 16px; margin-bottom: 20px; }
+
+        .controls-hint {
+            position: absolute; bottom: 15px; color: #556688; font-size: 12px; text-align: center; width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui-overlay">
+            <!-- Title Screen -->
+            <div id="titleScreen">
+                <div class="brand-logo">inforcer presents</div>
+                <h1>NORDIC RUN</h1>
+                <div class="subtitle">Escape the Claus</div>
+                <div class="btn-row">
+                    <button class="btn" id="playBtn">Play</button>
+                </div>
+                <div class="btn-row" style="margin-top:4px;">
+                    <button class="btn btn-small" id="shopBtn">Shop</button>
+                    <button class="btn btn-small" id="lbBtn">Leaderboard</button>
+                </div>
+                <div class="controls-hint">
+                    Arrow Keys / WASD to move &bull; Space to jump &bull; Down to slide &bull; P to pause
+                </div>
+            </div>
+
+            <!-- Character Select -->
+            <div id="charSelect">
+                <h2>Choose Your Runner</h2>
+                <div class="char-grid">
+                    <div class="char-card selected" data-char="gower">
+                        <canvas class="char-avatar" id="avatar-gower" width="100" height="120"></canvas>
+                        <h3>King Gower</h3>
+                        <p>Noble ruler of the Nordic lands. Balanced in all abilities.</p>
+                        <div class="char-stat"><span>Speed</span><div class="stat-bar"><div class="stat-fill" style="width:70%"></div></div></div>
+                        <div class="char-stat"><span>Agility</span><div class="stat-bar"><div class="stat-fill" style="width:70%"></div></div></div>
+                        <div class="char-stat"><span>Stamina</span><div class="stat-bar"><div class="stat-fill" style="width:80%"></div></div></div>
+                    </div>
+                    <div class="char-card" data-char="sam">
+                        <canvas class="char-avatar" id="avatar-sam" width="100" height="120"></canvas>
+                        <h3>Silly Sailor Sam</h3>
+                        <p>Nimble seafarer with quick reflexes. Fast but less stamina.</p>
+                        <div class="char-stat"><span>Speed</span><div class="stat-bar"><div class="stat-fill" style="width:90%"></div></div></div>
+                        <div class="char-stat"><span>Agility</span><div class="stat-bar"><div class="stat-fill" style="width:85%"></div></div></div>
+                        <div class="char-stat"><span>Stamina</span><div class="stat-bar"><div class="stat-fill" style="width:50%"></div></div></div>
+                    </div>
+                    <div class="char-card" data-char="larsen">
+                        <canvas class="char-avatar" id="avatar-larsen" width="100" height="120"></canvas>
+                        <h3>Viking Larsen</h3>
+                        <p>Mighty warrior with unstoppable endurance. Slower but tough.</p>
+                        <div class="char-stat"><span>Speed</span><div class="stat-bar"><div class="stat-fill" style="width:55%"></div></div></div>
+                        <div class="char-stat"><span>Agility</span><div class="stat-bar"><div class="stat-fill" style="width:60%"></div></div></div>
+                        <div class="char-stat"><span>Stamina</span><div class="stat-bar"><div class="stat-fill" style="width:95%"></div></div></div>
+                    </div>
+                </div>
+                <button class="btn" id="startBtn">Start Run</button>
+            </div>
+
+            <!-- Shop Screen -->
+            <div id="shopScreen">
+                <h2>Nordic Shop</h2>
+                <div class="shop-wallet" id="shopWallet">0 coins</div>
+                <div class="shop-grid" id="shopGrid"></div>
+                <button class="btn btn-small" id="shopBackBtn">Back</button>
+            </div>
+
+            <!-- Leaderboard Screen -->
+            <div id="leaderboardScreen">
+                <h2>Hall of Fame</h2>
+                <div id="lbContent"></div>
+                <button class="btn btn-small" id="lbBackBtn">Back</button>
+            </div>
+
+            <!-- HUD -->
+            <div id="hud">
+                <div>
+                    <div class="hud-score" id="scoreDisplay">0</div>
+                    <div class="hud-coins" id="coinDisplay">0 coins</div>
+                    <div class="hud-distance" id="distDisplay">0m</div>
+                    <div class="hud-combo" id="comboDisplay"></div>
+                </div>
+                <div id="hud-center"></div>
+                <button id="muteBtn">♪</button>
+                <div class="hud-right">
+                    <div class="hud-multiplier" id="multiplierDisplay">x1</div>
+                    <div style="color:#aaccee;font-size:12px;" id="zoneLabel">Snowy Forest</div>
+                    <div class="santa-meter"><div class="santa-fill" id="santaFill" style="width:30%"></div></div>
+                    <div class="santa-label">Santa Distance</div>
+                </div>
+            </div>
+
+            <!-- Zone Announcement -->
+            <div id="zoneAnnounce"></div>
+
+            <!-- Pause Overlay -->
+            <div id="pauseOverlay">
+                <h2>PAUSED</h2>
+                <p>Press P or Escape to resume</p>
+                <button class="btn" id="resumeBtn">Resume</button>
+            </div>
+
+            <!-- Game Over -->
+            <div id="gameOver">
+                <h2>CAUGHT!</h2>
+                <div class="caught-text">Santa got you! Ho ho ho!</div>
+                <div class="final-score" id="finalScore">Score: 0</div>
+                <div class="final-details" id="finalDetails"></div>
+                <div class="high-score" id="highScore">Best: 0</div>
+                <div class="btn-row">
+                    <button class="btn" id="retryBtn">Run Again</button>
+                    <button class="btn" id="menuBtn">Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ============================================================
+    //  INFORCER NORDIC RUN - Temple Run Style Endless Runner
+    // ============================================================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 800, H = 600;
+
+    // ---- Persistence ----
+    function loadData(key, def) { try { return JSON.parse(localStorage.getItem('nordicRun_' + key)) || def; } catch { return def; } }
+    function saveData(key, val) { localStorage.setItem('nordicRun_' + key, JSON.stringify(val)); }
+    let wallet = loadData('wallet', 0);
+    let leaderboard = loadData('leaderboard', []);
+    let ownedItems = loadData('ownedItems', []);
+
+    // ---- Audio Engine ----
+    let audioCtx = null;
+    let muted = false;
+    let musicGain = null;
+    let musicPlaying = false;
+
+    function initAudio() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        musicGain = audioCtx.createGain();
+        musicGain.gain.value = 0.12;
+        musicGain.connect(audioCtx.destination);
+    }
+
+    function playTone(freq, dur, type = 'sine', vol = 0.15, delay = 0) {
+        if (!audioCtx || muted) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + dur);
+    }
+
+    function sfxCoin() { playTone(880, 0.08, 'sine', 0.1); playTone(1320, 0.1, 'sine', 0.08, 0.05); }
+    function sfxHit() { playTone(100, 0.2, 'sawtooth', 0.2); playTone(60, 0.3, 'square', 0.1, 0.05); }
+    function sfxJump() { playTone(300, 0.1, 'sine', 0.08); playTone(500, 0.1, 'sine', 0.06, 0.05); }
+    function sfxSlide() { playTone(150, 0.15, 'sawtooth', 0.06); }
+    function sfxPowerup() { playTone(440, 0.1, 'sine', 0.1); playTone(660, 0.1, 'sine', 0.1, 0.08); playTone(880, 0.15, 'sine', 0.1, 0.16); }
+    function sfxGameOver() { playTone(400, 0.3, 'sawtooth', 0.15); playTone(300, 0.3, 'sawtooth', 0.12, 0.2); playTone(200, 0.5, 'sawtooth', 0.1, 0.4); }
+    function sfxSantaLaugh() { if (!audioCtx || muted) return; for(let i=0;i<3;i++){ playTone(120+i*10, 0.2, 'square', 0.06, i*0.25); playTone(90+i*10, 0.15, 'sawtooth', 0.04, i*0.25+0.1);} }
+
+    // Simple music loop
+    let musicTimer = null;
+    const nordicMelody = [
+        [330,0.3],[294,0.3],[262,0.3],[294,0.3],[330,0.3],[330,0.3],[330,0.6],
+        [294,0.3],[294,0.3],[294,0.6],[330,0.3],[392,0.3],[392,0.6],
+        [330,0.3],[294,0.3],[262,0.3],[294,0.3],[330,0.3],[330,0.3],[330,0.3],[330,0.3],
+        [294,0.3],[294,0.3],[330,0.3],[294,0.3],[262,0.9]
+    ];
+    function startMusic() {
+        if (musicPlaying || muted) return;
+        musicPlaying = true;
+        playMelodyLoop();
+    }
+    function playMelodyLoop() {
+        if (!musicPlaying || !audioCtx || muted) return;
+        let t = 0;
+        nordicMelody.forEach(([freq, dur]) => {
+            if (!muted && audioCtx) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + dur * 0.9);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + t);
+                osc.stop(audioCtx.currentTime + t + dur);
+            }
+            t += dur;
+        });
+        musicTimer = setTimeout(playMelodyLoop, t * 1000);
+    }
+    function stopMusic() { musicPlaying = false; if (musicTimer) clearTimeout(musicTimer); }
+
+    document.getElementById('muteBtn').addEventListener('click', () => {
+        muted = !muted;
+        document.getElementById('muteBtn').textContent = muted ? '✕' : '♪';
+        if (muted) stopMusic(); else if (gameState === 'playing') startMusic();
+    });
+
+    // ---- State ----
+    let gameState = 'title';
+    let selectedChar = 'gower';
+    let score = 0, coins = 0, highScore = 0, multiplier = 1;
+    let santaDistance = 40;
+    let speed = 3; // SLOWED from 5
+    let frameCount = 0;
+    let shakeTimer = 0;
+    let paused = false;
+    let distance = 0;
+    let combo = 0;
+    let bestCombo = 0;
+    let extraLife = false;
+    let headStart = false;
+    let scoreBoost = false;
+
+    // ---- Zones ----
+    const zones = [
+        { name: 'Snowy Forest', skyTop: '#0a1628', skyMid: '#152040', skyBot: '#1a3050', ground1: '#2a3a55', ground2: '#3a4a66', road: '#445566', roadInner: '#3a4a5a', treeTint: 1, mountainColor: '#1a2844' },
+        { name: 'Ice Cave', skyTop: '#0a1a2a', skyMid: '#102838', skyBot: '#1a3848', ground1: '#1a3040', ground2: '#2a4050', road: '#2a4455', roadInner: '#224050', treeTint: 0.5, mountainColor: '#0a2038' },
+        { name: 'Fjord Coast', skyTop: '#0a1020', skyMid: '#1a2030', skyBot: '#2a3545', ground1: '#2a3540', ground2: '#354550', road: '#3a4a55', roadInner: '#334455', treeTint: 0.7, mountainColor: '#152535' },
+        { name: 'Aurora Peak', skyTop: '#050818', skyMid: '#0a1025', skyBot: '#152035', ground1: '#1a2535', ground2: '#253545', road: '#354050', roadInner: '#2a3848', treeTint: 0.4, mountainColor: '#0a1828' }
+    ];
+    let currentZone = 0;
+    let zoneTransition = 0; // 0-1 blend
+    let zoneTimer = 0;
+    const ZONE_DURATION = 1800; // ~30s at 60fps
+
+    // ---- Power-ups ----
+    const powerUpTypes = [
+        { type: 'shield', color: '#4488ff', icon: 'S', duration: 300, desc: 'Shield' },
+        { type: 'magnet', color: '#cc44ff', icon: 'M', duration: 300, desc: 'Magnet' },
+        { type: 'boost', color: '#44ff88', icon: 'B', duration: 180, desc: 'Boost' },
+        { type: 'double', color: '#ffcc00', icon: '2x', duration: 480, desc: 'Double' }
+    ];
+    let activePowerUps = {}; // { type: framesRemaining }
+    let powerUpItems = [];
+    let powerUpSpawnTimer = 0;
+
+    // ---- Player ----
+    const player = {
+        lane: 1, x: 400, y: 420,
+        jumping: false, jumpVel: 0, jumpY: 0,
+        sliding: false, slideTimer: 0,
+        laneX: [260, 400, 540],
+        bobTimer: 0, alive: true, hitTimer: 0
+    };
+
+    // ---- World ----
+    const obstacles = [];
+    const coinItems = [];
+    const snowflakes = [];
+    let spawnTimer = 0;
+    let coinSpawnTimer = 0;
+    let difficultyTimer = 0;
+    let santaLaughTimer = 0;
+
+    // ---- Characters ----
+    const characters = {
+        gower: { name: 'King Gower', bodyColor: '#cc2222', capeColor: '#880000', crownColor: '#ffcc00', hairColor: '#553300', skinColor: '#ffcc99', speedMod: 1.0, jumpMod: 1.0, slideMod: 1.0 },
+        sam: { name: 'Silly Sailor Sam', bodyColor: '#2255aa', capeColor: '#1a3a77', crownColor: '#ffffff', hairColor: '#ffaa00', skinColor: '#ffddaa', speedMod: 1.2, jumpMod: 1.1, slideMod: 0.9 },
+        larsen: { name: 'Viking Larsen', bodyColor: '#665533', capeColor: '#554422', crownColor: '#888888', hairColor: '#cc8833', skinColor: '#eebb88', speedMod: 0.85, jumpMod: 0.9, slideMod: 1.2 }
+    };
+
+    // ---- Shop Items ----
+    const shopItems = [
+        { id: 'headstart', name: 'Head Start', icon: '🚀', desc: 'Start further from Santa', price: 500, consumable: true },
+        { id: 'scoreboost', name: 'Score Boost', icon: '⭐', desc: 'Start with x2 multiplier', price: 300, consumable: true },
+        { id: 'extralife', name: 'Extra Life', icon: '❤️', desc: 'Survive one Santa catch', price: 1000, consumable: true },
+        { id: 'skin_gower_gold', name: 'Gold King', icon: '👑', desc: 'Golden armor for King Gower', price: 200, consumable: false, charSkin: 'gower', skinColor: '#daa520' },
+        { id: 'skin_sam_pirate', name: 'Pirate Sam', icon: '🏴‍☠️', desc: 'Dark pirate gear for Sam', price: 200, consumable: false, charSkin: 'sam', skinColor: '#333' },
+        { id: 'skin_larsen_ice', name: 'Ice Viking', icon: '🧊', desc: 'Frost armor for Larsen', price: 200, consumable: false, charSkin: 'larsen', skinColor: '#66aadd' }
+    ];
+
+    // ---- Initialize snowflakes ----
+    for (let i = 0; i < 80; i++) {
+        snowflakes.push({ x: Math.random() * W, y: Math.random() * H, size: Math.random() * 3 + 1, speed: Math.random() * 2 + 0.5, wobble: Math.random() * Math.PI * 2 });
+    }
+
+    // ---- Draw Character Avatars ----
+    function drawCharAvatar(canvasId, charKey) {
+        const c = document.getElementById(canvasId);
+        if (!c) return;
+        const cx = c.getContext('2d');
+        const ch = characters[charKey];
+        cx.clearRect(0, 0, 100, 120);
+        cx.fillStyle = ch.bodyColor;
+        cx.beginPath(); cx.roundRect(30, 45, 40, 45, 5); cx.fill();
+        cx.fillStyle = ch.capeColor;
+        cx.beginPath(); cx.moveTo(30, 50); cx.lineTo(20, 90); cx.lineTo(35, 85); cx.closePath(); cx.fill();
+        cx.beginPath(); cx.moveTo(70, 50); cx.lineTo(80, 90); cx.lineTo(65, 85); cx.closePath(); cx.fill();
+        cx.fillStyle = ch.skinColor;
+        cx.beginPath(); cx.arc(50, 32, 18, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = ch.hairColor;
+        cx.beginPath(); cx.arc(50, 25, 16, Math.PI, Math.PI * 2); cx.fill();
+        cx.fillStyle = '#333';
+        cx.beginPath(); cx.arc(44, 32, 2.5, 0, Math.PI * 2); cx.arc(56, 32, 2.5, 0, Math.PI * 2); cx.fill();
+        cx.strokeStyle = '#663333'; cx.lineWidth = 1.5;
+        cx.beginPath(); cx.arc(50, 36, 6, 0.1 * Math.PI, 0.9 * Math.PI); cx.stroke();
+        if (charKey === 'gower') {
+            cx.fillStyle = ch.crownColor;
+            cx.beginPath(); cx.moveTo(35,20); cx.lineTo(37,8); cx.lineTo(43,16); cx.lineTo(50,5); cx.lineTo(57,16); cx.lineTo(63,8); cx.lineTo(65,20); cx.closePath(); cx.fill();
+            cx.fillStyle='#ff0000'; cx.beginPath(); cx.arc(44,16,2,0,Math.PI*2); cx.fill();
+            cx.fillStyle='#0088ff'; cx.beginPath(); cx.arc(56,16,2,0,Math.PI*2); cx.fill();
+        } else if (charKey === 'sam') {
+            cx.fillStyle='#fff'; cx.beginPath(); cx.ellipse(50,18,20,8,0,0,Math.PI*2); cx.fill();
+            cx.fillStyle='#2255aa'; cx.fillRect(38,10,24,10);
+            cx.fillStyle='#fff'; cx.fillRect(38,10,24,3);
+            cx.fillStyle='#ffcc00'; cx.font='10px serif'; cx.textAlign='center'; cx.fillText('⚓',50,19);
+        } else if (charKey === 'larsen') {
+            cx.fillStyle=ch.crownColor; cx.beginPath(); cx.arc(50,22,17,Math.PI,Math.PI*2); cx.fill();
+            cx.fillStyle='#777'; cx.fillRect(33,20,34,4);
+            cx.fillStyle='#ddcc99';
+            cx.beginPath(); cx.moveTo(33,20); cx.lineTo(22,5); cx.lineTo(28,8); cx.lineTo(36,20); cx.closePath(); cx.fill();
+            cx.beginPath(); cx.moveTo(67,20); cx.lineTo(78,5); cx.lineTo(72,8); cx.lineTo(64,20); cx.closePath(); cx.fill();
+        }
+        cx.fillStyle='#333'; cx.fillRect(37,88,10,20); cx.fillRect(53,88,10,20);
+        cx.fillStyle='#553322';
+        cx.beginPath(); cx.roundRect(34,104,16,10,3); cx.fill();
+        cx.beginPath(); cx.roundRect(50,104,16,10,3); cx.fill();
+    }
+
+    // ---- Draw Player ----
+    function drawPlayer() {
+        const ch = characters[selectedChar];
+        const px = player.x;
+        const py = player.y - player.jumpY;
+        const bob = player.sliding ? 0 : Math.sin(player.bobTimer * 0.15) * 3;
+        const hitFlash = player.hitTimer > 0 && Math.floor(player.hitTimer / 3) % 2 === 0;
+        if (hitFlash) ctx.globalAlpha = 0.5;
+
+        // Shield visual
+        if (activePowerUps.shield > 0) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(68,136,255,${0.4 + Math.sin(frameCount*0.1)*0.2})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(px, py + bob - 10, 35, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.translate(px, py + bob);
+        if (player.sliding) { ctx.translate(0, 20); ctx.scale(1.3, 0.5); }
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(0, 45, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+        const capeWave = Math.sin(frameCount * 0.1) * 5;
+        ctx.fillStyle = ch.capeColor;
+        ctx.beginPath(); ctx.moveTo(-12,-15); ctx.quadraticCurveTo(-18+capeWave,20,-10,40); ctx.lineTo(10,40); ctx.quadraticCurveTo(18-capeWave,20,12,-15); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = ch.bodyColor;
+        ctx.beginPath(); ctx.roundRect(-14,-15,28,35,4); ctx.fill();
+        ctx.fillStyle='#222'; ctx.fillRect(-14,10,28,4);
+        ctx.fillStyle='#ffcc00'; ctx.fillRect(-3,9,6,6);
+        const armSwing = Math.sin(player.bobTimer * 0.15) * 25;
+        ctx.strokeStyle = ch.bodyColor; ctx.lineWidth = 6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-14,-8); ctx.lineTo(-22, 5 + Math.sin(armSwing*0.03)*8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(14,-8); ctx.lineTo(22, 5 - Math.sin(armSwing*0.03)*8); ctx.stroke();
+        ctx.fillStyle = ch.skinColor;
+        ctx.beginPath(); ctx.arc(0,-28,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = ch.hairColor;
+        ctx.beginPath(); ctx.arc(0,-34,12,Math.PI,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#333';
+        ctx.beginPath(); ctx.arc(-5,-28,2,0,Math.PI*2); ctx.arc(5,-28,2,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#663333'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(-4,-22); ctx.lineTo(4,-22); ctx.stroke();
+
+        if (selectedChar === 'gower') {
+            ctx.fillStyle='#ffcc00';
+            ctx.beginPath(); ctx.moveTo(-12,-38); ctx.lineTo(-10,-48); ctx.lineTo(-4,-42); ctx.lineTo(0,-52); ctx.lineTo(4,-42); ctx.lineTo(10,-48); ctx.lineTo(12,-38); ctx.closePath(); ctx.fill();
+            ctx.fillStyle='#ff0000'; ctx.beginPath(); ctx.arc(-3,-42,1.5,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#0088ff'; ctx.beginPath(); ctx.arc(4,-42,1.5,0,Math.PI*2); ctx.fill();
+        } else if (selectedChar === 'sam') {
+            ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(0,-40,16,6,0,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#2255aa'; ctx.fillRect(-10,-48,20,9);
+            ctx.fillStyle='#fff'; ctx.fillRect(-10,-48,20,3);
+        } else if (selectedChar === 'larsen') {
+            ctx.fillStyle='#888'; ctx.beginPath(); ctx.arc(0,-36,14,Math.PI,Math.PI*2); ctx.fill();
+            ctx.fillRect(-14,-38,28,3);
+            ctx.fillStyle='#ddcc99';
+            ctx.beginPath(); ctx.moveTo(-14,-38); ctx.lineTo(-24,-52); ctx.lineTo(-18,-48); ctx.lineTo(-11,-38); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(14,-38); ctx.lineTo(24,-52); ctx.lineTo(18,-48); ctx.lineTo(11,-38); ctx.closePath(); ctx.fill();
+        }
+
+        const legSwing = Math.sin(player.bobTimer * 0.15) * 12;
+        if (!player.sliding) {
+            ctx.fillStyle='#333';
+            ctx.save(); ctx.translate(-6,20); ctx.rotate(legSwing*0.02);
+            ctx.fillRect(-4,0,8,18);
+            ctx.fillStyle='#553322'; ctx.beginPath(); ctx.roundRect(-5,16,12,7,2); ctx.fill();
+            ctx.restore();
+            ctx.fillStyle='#333';
+            ctx.save(); ctx.translate(6,20); ctx.rotate(-legSwing*0.02);
+            ctx.fillRect(-4,0,8,18);
+            ctx.fillStyle='#553322'; ctx.beginPath(); ctx.roundRect(-5,16,12,7,2); ctx.fill();
+            ctx.restore();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    }
+
+    // ---- Draw Santa ----
+    function drawSanta() {
+        const santaScale = Math.max(0.3, 1 - santaDistance / 80);
+        const santaY = 480 + (1 - santaScale) * 60;
+        const santaX = 400 + Math.sin(frameCount * 0.03) * 20;
+        const bob = Math.sin(frameCount * 0.12) * 3;
+        ctx.save();
+        ctx.translate(santaX, santaY + bob);
+        ctx.scale(santaScale, santaScale);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(0, 60, 30, 8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#cc0000';
+        ctx.beginPath(); ctx.roundRect(-25,-10,50,55,8); ctx.fill();
+        ctx.fillStyle='#111'; ctx.fillRect(-25,25,50,8);
+        ctx.fillStyle='#ffcc00'; ctx.fillRect(-6,24,12,10);
+        ctx.fillStyle='#fff'; ctx.fillRect(-25,-10,50,6); ctx.fillRect(-25,40,50,6);
+        ctx.strokeStyle='#cc0000'; ctx.lineWidth=10; ctx.lineCap='round';
+        const armReach = Math.sin(frameCount*0.1)*8;
+        ctx.beginPath(); ctx.moveTo(-25,5); ctx.lineTo(-35-armReach,-15); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(25,5); ctx.lineTo(35+armReach,-15); ctx.stroke();
+        ctx.fillStyle='#fff';
+        ctx.beginPath(); ctx.arc(-35-armReach,-17,7,0,Math.PI*2); ctx.arc(35+armReach,-17,7,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ffccaa'; ctx.beginPath(); ctx.arc(0,-25,18,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff';
+        ctx.beginPath(); ctx.moveTo(-15,-20); ctx.quadraticCurveTo(-20,5,-10,10); ctx.lineTo(10,10); ctx.quadraticCurveTo(20,5,15,-20); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#fff';
+        ctx.beginPath(); ctx.ellipse(-7,-28,5,4,0,0,Math.PI*2); ctx.ellipse(7,-28,5,4,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff0000';
+        ctx.beginPath(); ctx.arc(-7,-28,2.5,0,Math.PI*2); ctx.arc(7,-28,2.5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#000';
+        ctx.beginPath(); ctx.arc(-7,-28,1.2,0,Math.PI*2); ctx.arc(7,-28,1.2,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#663300'; ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.moveTo(-12,-35); ctx.lineTo(-4,-33); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(12,-35); ctx.lineTo(4,-33); ctx.stroke();
+        ctx.strokeStyle='#cc0000'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(0,-18,8,0.1*Math.PI,0.9*Math.PI); ctx.stroke();
+        ctx.fillStyle='#cc0000';
+        ctx.beginPath(); ctx.moveTo(-16,-35); ctx.quadraticCurveTo(0,-70,20,-50); ctx.lineTo(16,-35); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#fff';
+        ctx.beginPath(); ctx.ellipse(0,-35,18,5,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(20,-50,6,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#cc0000'; ctx.fillRect(-15,44,12,18); ctx.fillRect(3,44,12,18);
+        ctx.fillStyle='#222';
+        ctx.beginPath(); ctx.roundRect(-17,58,16,10,3); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(1,58,16,10,3); ctx.fill();
+        ctx.restore();
+
+        if (santaDistance < 25) {
+            ctx.save();
+            ctx.font = 'bold 20px serif';
+            ctx.fillStyle = `rgba(255,50,50,${(25-santaDistance)/25})`;
+            ctx.textAlign = 'center';
+            ctx.fillText('HO HO HO!', santaX, santaY - 40 * santaScale + Math.sin(frameCount*0.05)*5);
+            ctx.restore();
+        }
+    }
+
+    // ---- Zone colors (blended) ----
+    function getZoneColor(prop) {
+        const z1 = zones[currentZone];
+        const nextZone = Math.min(zones.length - 1, currentZone + 1);
+        const z2 = zones[nextZone];
+        if (zoneTransition <= 0 || currentZone === nextZone) return z1[prop];
+        // Simple: just return current zone color (transitions happen via announcements)
+        return z1[prop];
+    }
+
+    // ---- Draw Road ----
+    function drawRoad() {
+        const z = zones[currentZone];
+        const vanishY = 200, vanishX = 400, bottomY = 600;
+        const roadWidthBottom = 500, roadWidthTop = 80;
+
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, vanishY + 50);
+        skyGrad.addColorStop(0, z.skyTop); skyGrad.addColorStop(0.5, z.skyMid); skyGrad.addColorStop(1, z.skyBot);
+        ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, W, vanishY + 50);
+
+        // Northern lights (stronger in Aurora Peak)
+        const auroraStrength = currentZone === 3 ? 0.3 : 0.15;
+        ctx.save(); ctx.globalAlpha = auroraStrength;
+        for (let i = 0; i < 3; i++) {
+            const wave = Math.sin(frameCount * 0.005 + i * 2) * 100;
+            const grad = ctx.createLinearGradient(200+wave, 20, 600+wave, 120);
+            grad.addColorStop(0, 'transparent');
+            grad.addColorStop(0.3, i===0?'#00ff88':i===1?'#0088ff':'#aa00ff');
+            grad.addColorStop(0.7, i===0?'#00ff88':i===1?'#0088ff':'#aa00ff');
+            grad.addColorStop(1, 'transparent');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.moveTo(100, 0);
+            for (let x = 100; x < 700; x += 10) { ctx.lineTo(x, 50 + Math.sin((x+frameCount*0.5+i*100)*0.01)*30 + i*25); }
+            ctx.lineTo(700, 0); ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+
+        // Mountains
+        ctx.fillStyle = z.mountainColor;
+        ctx.beginPath(); ctx.moveTo(0, vanishY + 20);
+        for (let x = 0; x <= W; x += 40) { ctx.lineTo(x, vanishY + 20 - (Math.sin(x*0.008+1)*40 + Math.sin(x*0.015)*20 + 30)); }
+        ctx.lineTo(W, vanishY + 20); ctx.closePath(); ctx.fill();
+
+        // Fjord water on sides for zone 2
+        if (currentZone === 2) {
+            ctx.fillStyle = 'rgba(20,60,100,0.4)';
+            ctx.fillRect(0, vanishY, W, bottomY - vanishY);
+        }
+
+        // Ground
+        const groundGrad = ctx.createLinearGradient(0, vanishY, 0, bottomY);
+        groundGrad.addColorStop(0, z.ground1); groundGrad.addColorStop(1, z.ground2);
+        ctx.fillStyle = groundGrad; ctx.fillRect(0, vanishY, W, bottomY - vanishY);
+
+        // Road
+        ctx.fillStyle = z.road;
+        ctx.beginPath();
+        ctx.moveTo(vanishX-roadWidthTop/2, vanishY); ctx.lineTo(vanishX+roadWidthTop/2, vanishY);
+        ctx.lineTo(vanishX+roadWidthBottom/2, bottomY); ctx.lineTo(vanishX-roadWidthBottom/2, bottomY);
+        ctx.closePath(); ctx.fill();
+
+        ctx.fillStyle = z.roadInner;
+        ctx.beginPath();
+        ctx.moveTo(vanishX-roadWidthTop/2+3, vanishY); ctx.lineTo(vanishX+roadWidthTop/2-3, vanishY);
+        ctx.lineTo(vanishX+roadWidthBottom/2-10, bottomY); ctx.lineTo(vanishX-roadWidthBottom/2+10, bottomY);
+        ctx.closePath(); ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.setLineDash([10, 15]);
+        for (let i = 0; i < 4; i++) {
+            const t = i/3;
+            ctx.beginPath();
+            ctx.moveTo(vanishX-roadWidthTop/2+t*roadWidthTop, vanishY);
+            ctx.lineTo(vanishX-roadWidthBottom/2+t*roadWidthBottom, bottomY);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        // Animated stripes
+        for (let i = 0; i < 12; i++) {
+            const t = ((i/12) + (frameCount*speed*0.0008) % 1) % 1;
+            const p = Math.pow(t, 1.5);
+            const y = vanishY + p * (bottomY - vanishY);
+            const roadW = roadWidthTop + p * (roadWidthBottom - roadWidthTop);
+            ctx.strokeStyle = `rgba(255,255,255,${t*0.3})`; ctx.lineWidth = 1 + t * 2;
+            ctx.beginPath(); ctx.moveTo(vanishX-roadW/2, y); ctx.lineTo(vanishX+roadW/2, y); ctx.stroke();
+        }
+
+        // Snow banks
+        ctx.fillStyle = '#556677';
+        for (let i = 0; i < 20; i++) {
+            const t = i/20, p = Math.pow(t,1.5);
+            const y = vanishY + p*(bottomY-vanishY);
+            const roadW = roadWidthTop + p*(roadWidthBottom-roadWidthTop);
+            const s = 3 + t*10;
+            ctx.beginPath(); ctx.ellipse(vanishX-roadW/2-s/2, y, s, s*0.4, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(vanishX+roadW/2+s/2, y, s, s*0.4, 0, 0, Math.PI*2); ctx.fill();
+        }
+
+        // Ice cave stalactites for zone 1
+        if (currentZone === 1) {
+            ctx.fillStyle = '#4488aa';
+            for (let i = 0; i < 8; i++) {
+                const x = 50 + i * 100 + Math.sin(i*3)*20;
+                const h = 30 + Math.sin(i*2.5)*20;
+                ctx.beginPath(); ctx.moveTo(x-8, 0); ctx.lineTo(x, h); ctx.lineTo(x+8, 0); ctx.closePath(); ctx.fill();
+            }
+        }
+
+        drawSideTrees();
+    }
+
+    function drawSideTrees() {
+        const vanishY = 200, vanishX = 400;
+        const z = zones[currentZone];
+        for (let side = -1; side <= 1; side += 2) {
+            for (let i = 0; i < 10; i++) {
+                const t = ((i/10) + (frameCount*speed*0.0004) % 1) % 1;
+                const p = Math.pow(t,1.5);
+                const y = vanishY + p*400;
+                const roadW = 80 + p*500;
+                const x = vanishX + side*(roadW/2 + 30 + p*40);
+                const treeSize = 5 + p*25;
+                ctx.globalAlpha = Math.min(1, t*2) * z.treeTint;
+                ctx.fillStyle='#3a2a1a'; ctx.fillRect(x-treeSize*0.08, y-treeSize*0.5, treeSize*0.16, treeSize*0.5);
+                for (let layer = 0; layer < 3; layer++) {
+                    ctx.fillStyle = ['#1a4a2a','#1d5530','#206038'][layer];
+                    const ly = y-treeSize*0.3-layer*treeSize*0.3;
+                    const lw = treeSize*(0.5-layer*0.1);
+                    ctx.beginPath(); ctx.moveTo(x, ly-treeSize*0.3); ctx.lineTo(x-lw, ly+treeSize*0.15); ctx.lineTo(x+lw, ly+treeSize*0.15); ctx.closePath(); ctx.fill();
+                }
+                ctx.fillStyle='rgba(200,220,255,0.6)';
+                for(let s=0;s<3;s++){
+                    ctx.beginPath(); ctx.ellipse(x, y-treeSize*0.3-s*treeSize*0.3-treeSize*0.1, treeSize*(0.3-s*0.06), treeSize*0.04, 0, 0, Math.PI); ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    // ---- Obstacles ----
+    function spawnObstacle() {
+        const lane = Math.floor(Math.random() * 3);
+        const types = ['ice_rock', 'log', 'snowman', 'barrier'];
+        obstacles.push({ lane, type: types[Math.floor(Math.random()*types.length)], z: 0, hit: false });
+        if (Math.random() < 0.25 && speed > 4) {
+            let lane2 = (lane + (Math.random() < 0.5 ? 1 : 2)) % 3;
+            obstacles.push({ lane: lane2, type: types[Math.floor(Math.random()*types.length)], z: 0, hit: false });
+        }
+    }
+
+    function getWorldPos(z, lane) {
+        const vanishY = 200, vanishX = 400;
+        const t = Math.min(1, z / 100);
+        const p = Math.pow(t, 1.5);
+        const y = vanishY + p * 400;
+        const roadW = 80 + p * 500;
+        const laneW = roadW / 3;
+        const laneCenter = vanishX - roadW/2 + laneW*lane + laneW/2;
+        const size = 5 + p * 35;
+        const alpha = Math.min(1, t*3);
+        return { y, laneCenter, size, alpha, p };
+    }
+
+    function drawObstacle(obs) {
+        const { y, laneCenter: lc, size: s, alpha } = getWorldPos(obs.z, obs.lane);
+        ctx.globalAlpha = alpha;
+        if (obs.type === 'ice_rock') {
+            ctx.fillStyle='#88aacc';
+            ctx.beginPath(); ctx.moveTo(lc,y-s); ctx.lineTo(lc+s*0.7,y-s*0.3); ctx.lineTo(lc+s*0.5,y); ctx.lineTo(lc-s*0.5,y); ctx.lineTo(lc-s*0.7,y-s*0.3); ctx.closePath(); ctx.fill();
+            ctx.fillStyle='rgba(200,230,255,0.4)';
+            ctx.beginPath(); ctx.moveTo(lc-s*0.1,y-s*0.8); ctx.lineTo(lc+s*0.2,y-s*0.5); ctx.lineTo(lc,y-s*0.4); ctx.closePath(); ctx.fill();
+        } else if (obs.type === 'log') {
+            ctx.fillStyle='#5a3a1a'; ctx.beginPath(); ctx.ellipse(lc,y-s*0.3,s*0.7,s*0.3,0,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#6a4a2a'; ctx.beginPath(); ctx.ellipse(lc,y-s*0.4,s*0.5,s*0.2,0,0,Math.PI*2); ctx.fill();
+        } else if (obs.type === 'snowman') {
+            ctx.fillStyle='#dde8f0';
+            ctx.beginPath(); ctx.arc(lc,y-s*0.2,s*0.4,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(lc,y-s*0.55,s*0.3,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(lc,y-s*0.82,s*0.2,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#222';
+            ctx.beginPath(); ctx.arc(lc-s*0.07,y-s*0.85,s*0.03,0,Math.PI*2); ctx.arc(lc+s*0.07,y-s*0.85,s*0.03,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#ff8800';
+            ctx.beginPath(); ctx.moveTo(lc,y-s*0.8); ctx.lineTo(lc+s*0.15,y-s*0.78); ctx.lineTo(lc,y-s*0.76); ctx.closePath(); ctx.fill();
+        } else if (obs.type === 'barrier') {
+            ctx.fillStyle='#aa3333'; ctx.fillRect(lc-s*0.6,y-s*0.6,s*1.2,s*0.15);
+            ctx.fillStyle='#664422'; ctx.fillRect(lc-s*0.5,y-s*0.6,s*0.1,s*0.6); ctx.fillRect(lc+s*0.4,y-s*0.6,s*0.1,s*0.6);
+            ctx.fillStyle='#ffcc00'; ctx.fillRect(lc-s*0.6,y-s*0.55,s*0.3,s*0.08); ctx.fillRect(lc+s*0.05,y-s*0.55,s*0.3,s*0.08);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // ---- Coins ----
+    function spawnCoin() {
+        const lane = Math.floor(Math.random() * 3);
+        for (let i = 0; i < Math.floor(Math.random()*3)+1; i++) {
+            coinItems.push({ lane, z: -i*8, collected: false });
+        }
+    }
+
+    function drawCoin(coin) {
+        const { y, laneCenter: lc, size: s, alpha } = getWorldPos(coin.z, coin.lane);
+        const spin = Math.abs(Math.sin(frameCount*0.05+coin.z*0.1));
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle='#ffdd00'; ctx.beginPath(); ctx.ellipse(lc,y-s*1.5,s*0.5*spin,s*0.5,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ffaa00'; ctx.beginPath(); ctx.ellipse(lc,y-s*1.5,s*0.3*spin,s*0.3,0,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    // ---- Power-up Items ----
+    function spawnPowerUp() {
+        const lane = Math.floor(Math.random() * 3);
+        const pu = powerUpTypes[Math.floor(Math.random()*powerUpTypes.length)];
+        powerUpItems.push({ lane, z: 0, type: pu.type, color: pu.color, icon: pu.icon, collected: false });
+    }
+
+    function drawPowerUp(pu) {
+        const { y, laneCenter: lc, size: s, alpha } = getWorldPos(pu.z, pu.lane);
+        ctx.globalAlpha = alpha;
+        const pulse = 1 + Math.sin(frameCount * 0.08) * 0.15;
+        const r = s * 0.5 * pulse;
+        // Glow
+        ctx.save();
+        ctx.shadowColor = pu.color; ctx.shadowBlur = 15;
+        ctx.fillStyle = pu.color;
+        ctx.beginPath(); ctx.arc(lc, y - s * 1.2, r, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+        // Icon
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(8,r)}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(pu.icon, lc, y - s * 1.2);
+        ctx.globalAlpha = 1;
+    }
+
+    // ---- Snowflakes ----
+    function drawSnowflakes() {
+        ctx.fillStyle = 'rgba(220,235,255,0.7)';
+        snowflakes.forEach(sf => {
+            sf.y += sf.speed; sf.x += Math.sin(sf.wobble + frameCount*0.02)*0.5;
+            if (sf.y > H) { sf.y = -5; sf.x = Math.random()*W; }
+            if (sf.x < 0) sf.x = W; if (sf.x > W) sf.x = 0;
+            ctx.beginPath(); ctx.arc(sf.x, sf.y, sf.size, 0, Math.PI*2); ctx.fill();
+        });
+    }
+
+    // ---- Collision ----
+    function checkCollisions() {
+        const playerZ = 85;
+        obstacles.forEach(obs => {
+            if (obs.hit) return;
+            if (Math.abs(obs.z - playerZ) < 6 && obs.lane === player.lane) {
+                if (player.jumpY > 30) return;
+                if (player.sliding && obs.type === 'barrier') return;
+                obs.hit = true;
+                if (activePowerUps.shield > 0) {
+                    activePowerUps.shield = 0;
+                    shakeTimer = 4;
+                    return;
+                }
+                player.hitTimer = 20;
+                shakeTimer = 10;
+                santaDistance -= 15;
+                speed = Math.max(2, speed - 0.3);
+                combo = 0;
+                sfxHit();
+                if (santaDistance <= 0) {
+                    if (extraLife) {
+                        extraLife = false;
+                        santaDistance = 30;
+                    } else {
+                        gameOver();
+                    }
+                }
+            }
+        });
+
+        // Coins - magnet collects all lanes
+        coinItems.forEach(coin => {
+            if (coin.collected) return;
+            const inRange = Math.abs(coin.z - playerZ) < 6;
+            const magnetActive = activePowerUps.magnet > 0;
+            if (inRange && (coin.lane === player.lane || magnetActive)) {
+                coin.collected = true;
+                const val = activePowerUps.double > 0 ? 20 : 10;
+                coins++; score += val * multiplier;
+                combo++;
+                if (combo > bestCombo) bestCombo = combo;
+                sfxCoin();
+            }
+        });
+
+        // Power-ups
+        powerUpItems.forEach(pu => {
+            if (pu.collected) return;
+            if (Math.abs(pu.z - playerZ) < 6 && pu.lane === player.lane) {
+                pu.collected = true;
+                const def = powerUpTypes.find(p => p.type === pu.type);
+                activePowerUps[pu.type] = def.duration;
+                sfxPowerup();
+                if (pu.type === 'boost') {
+                    santaDistance = Math.min(100, santaDistance + 20);
+                }
+            }
+        });
+    }
+
+    // ---- Game Over ----
+    function gameOver() {
+        gameState = 'gameover';
+        player.alive = false;
+        sfxGameOver();
+        stopMusic();
+
+        // Add to wallet
+        wallet += coins;
+        saveData('wallet', wallet);
+
+        // Save to leaderboard
+        const entry = { score, coins, distance: Math.floor(distance), char: characters[selectedChar].name, zone: zones[currentZone].name, date: new Date().toLocaleDateString() };
+        leaderboard.push(entry);
+        leaderboard.sort((a, b) => b.score - a.score);
+        leaderboard = leaderboard.slice(0, 5);
+        saveData('leaderboard', leaderboard);
+
+        highScore = leaderboard.length ? leaderboard[0].score : 0;
+
+        document.getElementById('gameOver').style.display = 'flex';
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('finalScore').textContent = `Score: ${score}`;
+        document.getElementById('finalDetails').textContent = `${Math.floor(distance)}m | ${coins} coins | Best combo: ${bestCombo}`;
+        document.getElementById('highScore').textContent = `Best: ${highScore}`;
+    }
+
+    // ---- HUD Power-up icons ----
+    function updatePowerUpHUD() {
+        const container = document.getElementById('hud-center');
+        container.innerHTML = '';
+        for (const [type, frames] of Object.entries(activePowerUps)) {
+            if (frames <= 0) continue;
+            const def = powerUpTypes.find(p => p.type === type);
+            const div = document.createElement('div');
+            div.className = 'powerup-icon';
+            div.style.background = def.color;
+            div.textContent = def.icon;
+            div.title = `${def.desc}: ${Math.ceil(frames/60)}s`;
+            container.appendChild(div);
+        }
+    }
+
+    // ---- Update ----
+    function update() {
+        if (gameState !== 'playing' || paused) return;
+        frameCount++;
+        player.bobTimer += speed * 0.5;
+        distance += speed * 0.02;
+
+        // Lane
+        player.x += (player.laneX[player.lane] - player.x) * 0.15;
+
+        // Jump
+        if (player.jumping) {
+            player.jumpY += player.jumpVel;
+            player.jumpVel -= 1.2;
+            if (player.jumpY <= 0) { player.jumpY = 0; player.jumping = false; player.jumpVel = 0; }
+        }
+
+        // Slide
+        if (player.sliding) { player.slideTimer--; if (player.slideTimer <= 0) player.sliding = false; }
+
+        if (player.hitTimer > 0) player.hitTimer--;
+        if (shakeTimer > 0) shakeTimer--;
+
+        // Difficulty ramp - SLOWER
+        difficultyTimer++;
+        if (difficultyTimer % 500 === 0) {
+            speed = Math.min(9, speed + 0.15);
+            if (difficultyTimer % 1000 === 0) multiplier = Math.min(5, multiplier + 1);
+        }
+
+        // Zone progression
+        zoneTimer++;
+        if (zoneTimer >= ZONE_DURATION && currentZone < zones.length - 1) {
+            zoneTimer = 0;
+            currentZone++;
+            announceZone(zones[currentZone].name);
+            speed = Math.min(9, speed + 0.3);
+        }
+
+        // Score
+        score += Math.floor(speed * 0.3);
+
+        // Santa distance
+        santaDistance += 0.015;
+        santaDistance = Math.min(100, santaDistance);
+        santaDistance -= 0.008;
+
+        // Santa laugh sfx
+        santaLaughTimer++;
+        if (santaDistance < 20 && santaLaughTimer > 300) {
+            sfxSantaLaugh();
+            santaLaughTimer = 0;
+        }
+
+        // Power-up timers
+        for (const key of Object.keys(activePowerUps)) {
+            if (activePowerUps[key] > 0) activePowerUps[key]--;
+        }
+
+        // Spawn obstacles - SLOWER
+        spawnTimer++;
+        if (spawnTimer > Math.max(50, 120 - speed * 7)) {
+            spawnObstacle();
+            spawnTimer = 0;
+        }
+
+        // Spawn coins
+        coinSpawnTimer++;
+        if (coinSpawnTimer > 60) { spawnCoin(); coinSpawnTimer = 0; }
+
+        // Spawn power-ups
+        powerUpSpawnTimer++;
+        if (powerUpSpawnTimer > 480) { spawnPowerUp(); powerUpSpawnTimer = 0; }
+
+        // Move objects - SLOWER
+        const moveSpeed = speed * 0.4;
+        obstacles.forEach(o => o.z += moveSpeed);
+        coinItems.forEach(c => c.z += moveSpeed);
+        powerUpItems.forEach(p => p.z += moveSpeed);
+
+        // Cleanup
+        for (let i = obstacles.length-1; i >= 0; i--) if (obstacles[i].z > 120) obstacles.splice(i,1);
+        for (let i = coinItems.length-1; i >= 0; i--) if (coinItems[i].z > 120 || coinItems[i].collected) coinItems.splice(i,1);
+        for (let i = powerUpItems.length-1; i >= 0; i--) if (powerUpItems[i].z > 120 || powerUpItems[i].collected) powerUpItems.splice(i,1);
+
+        checkCollisions();
+
+        // Update HUD
+        document.getElementById('scoreDisplay').textContent = score;
+        document.getElementById('coinDisplay').textContent = `${coins} coins`;
+        document.getElementById('distDisplay').textContent = `${Math.floor(distance)}m`;
+        document.getElementById('multiplierDisplay').textContent = `x${multiplier}`;
+        document.getElementById('santaFill').style.width = `${100 - santaDistance}%`;
+        document.getElementById('zoneLabel').textContent = zones[currentZone].name;
+        document.getElementById('comboDisplay').textContent = combo > 2 ? `Combo x${combo}` : '';
+        updatePowerUpHUD();
+    }
+
+    // ---- Zone announcement ----
+    function announceZone(name) {
+        const el = document.getElementById('zoneAnnounce');
+        el.textContent = name;
+        el.style.opacity = 1;
+        setTimeout(() => { el.style.opacity = 0; }, 2500);
+    }
+
+    // ---- Draw ----
+    function draw() {
+        ctx.save();
+        if (shakeTimer > 0) ctx.translate((Math.random()-0.5)*shakeTimer, (Math.random()-0.5)*shakeTimer);
+        ctx.clearRect(-10, -10, W+20, H+20);
+        if (gameState === 'playing' || gameState === 'gameover') {
+            drawRoad();
+            coinItems.forEach(c => { if (!c.collected) drawCoin(c); });
+            powerUpItems.forEach(p => { if (!p.collected) drawPowerUp(p); });
+            obstacles.forEach(o => drawObstacle(o));
+            if (player.alive || gameState === 'gameover') drawPlayer();
+            drawSanta();
+            drawSnowflakes();
+            const vignette = ctx.createRadialGradient(400,300,200,400,300,500);
+            vignette.addColorStop(0,'transparent'); vignette.addColorStop(1,'rgba(0,0,0,0.4)');
+            ctx.fillStyle = vignette; ctx.fillRect(0,0,W,H);
+        }
+        ctx.restore();
+    }
+
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+    // ---- Input ----
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+            if (gameState === 'playing') {
+                paused = !paused;
+                document.getElementById('pauseOverlay').style.display = paused ? 'flex' : 'none';
+                if (paused) stopMusic(); else startMusic();
+                return;
+            }
+        }
+        if (gameState !== 'playing' || paused) return;
+        switch (e.key) {
+            case 'ArrowLeft': case 'a': case 'A': if (player.lane > 0) player.lane--; break;
+            case 'ArrowRight': case 'd': case 'D': if (player.lane < 2) player.lane++; break;
+            case 'ArrowUp': case 'w': case 'W': case ' ':
+                if (!player.jumping && !player.sliding) { player.jumping = true; player.jumpVel = 15 * characters[selectedChar].jumpMod; sfxJump(); }
+                e.preventDefault(); break;
+            case 'ArrowDown': case 's': case 'S':
+                if (!player.jumping && !player.sliding) { player.sliding = true; player.slideTimer = 30 * characters[selectedChar].slideMod; sfxSlide(); }
+                break;
+        }
+    });
+
+    // Touch controls
+    let touchStartX = 0, touchStartY = 0;
+    canvas.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; e.preventDefault(); });
+    canvas.addEventListener('touchend', (e) => {
+        if (gameState !== 'playing' || paused) return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx > 30 && player.lane < 2) player.lane++;
+            else if (dx < -30 && player.lane > 0) player.lane--;
+        } else {
+            if (dy < -30 && !player.jumping) { player.jumping = true; player.jumpVel = 15 * characters[selectedChar].jumpMod; sfxJump(); }
+            else if (dy > 30 && !player.sliding) { player.sliding = true; player.slideTimer = 30; sfxSlide(); }
+        }
+        e.preventDefault();
+    });
+
+    // ---- Shop ----
+    function renderShop() {
+        document.getElementById('shopWallet').textContent = `${wallet} coins`;
+        const grid = document.getElementById('shopGrid');
+        grid.innerHTML = '';
+        shopItems.forEach(item => {
+            const owned = ownedItems.includes(item.id);
+            const div = document.createElement('div');
+            div.className = 'shop-item' + (owned && !item.consumable ? ' owned' : '');
+            div.innerHTML = `<div class="icon">${item.icon}</div><h4>${item.name}</h4><p>${item.desc}</p><div class="price">${owned && !item.consumable ? 'Owned' : item.price + ' coins'}</div>`;
+            div.addEventListener('click', () => buyItem(item));
+            grid.appendChild(div);
+        });
+    }
+
+    function buyItem(item) {
+        if (!item.consumable && ownedItems.includes(item.id)) return;
+        if (wallet < item.price) return;
+        wallet -= item.price;
+        if (!item.consumable) ownedItems.push(item.id);
+        saveData('wallet', wallet);
+        saveData('ownedItems', ownedItems);
+        // Apply consumable effects at game start
+        if (item.id === 'headstart') headStart = true;
+        if (item.id === 'scoreboost') scoreBoost = true;
+        if (item.id === 'extralife') extraLife = true;
+        renderShop();
+    }
+
+    // ---- Leaderboard ----
+    function renderLeaderboard() {
+        const container = document.getElementById('lbContent');
+        if (leaderboard.length === 0) {
+            container.innerHTML = '<div class="lb-empty">No runs yet. Get out there!</div>';
+            return;
+        }
+        let html = '<table class="lb-table"><tr><th>#</th><th>Score</th><th>Distance</th><th>Character</th><th>Zone</th></tr>';
+        leaderboard.forEach((e, i) => {
+            html += `<tr><td>${i+1}</td><td>${e.score}</td><td>${e.distance}m</td><td>${e.char}</td><td>${e.zone || '-'}</td></tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
+
+    // ---- UI Buttons ----
+    document.getElementById('playBtn').addEventListener('click', () => {
+        initAudio();
+        document.getElementById('titleScreen').style.display = 'none';
+        document.getElementById('charSelect').style.display = 'flex';
+        gameState = 'select';
+        drawCharAvatar('avatar-gower','gower'); drawCharAvatar('avatar-sam','sam'); drawCharAvatar('avatar-larsen','larsen');
+    });
+    document.getElementById('shopBtn').addEventListener('click', () => {
+        document.getElementById('titleScreen').style.display = 'none';
+        document.getElementById('shopScreen').style.display = 'flex';
+        renderShop();
+    });
+    document.getElementById('shopBackBtn').addEventListener('click', () => {
+        document.getElementById('shopScreen').style.display = 'none';
+        document.getElementById('titleScreen').style.display = 'flex';
+    });
+    document.getElementById('lbBtn').addEventListener('click', () => {
+        document.getElementById('titleScreen').style.display = 'none';
+        document.getElementById('leaderboardScreen').style.display = 'flex';
+        renderLeaderboard();
+    });
+    document.getElementById('lbBackBtn').addEventListener('click', () => {
+        document.getElementById('leaderboardScreen').style.display = 'none';
+        document.getElementById('titleScreen').style.display = 'flex';
+    });
+
+    document.querySelectorAll('.char-card').forEach(card => {
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            selectedChar = card.dataset.char;
+        });
+    });
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('retryBtn').addEventListener('click', () => { initAudio(); startGame(); });
+    document.getElementById('menuBtn').addEventListener('click', () => {
+        document.getElementById('gameOver').style.display = 'none';
+        document.getElementById('titleScreen').style.display = 'flex';
+        gameState = 'title';
+    });
+    document.getElementById('resumeBtn').addEventListener('click', () => {
+        paused = false;
+        document.getElementById('pauseOverlay').style.display = 'none';
+        startMusic();
+    });
+
+    function startGame() {
+        document.getElementById('charSelect').style.display = 'none';
+        document.getElementById('gameOver').style.display = 'none';
+        document.getElementById('hud').style.display = 'flex';
+        document.getElementById('pauseOverlay').style.display = 'none';
+        gameState = 'playing'; paused = false;
+        score = 0; coins = 0; multiplier = scoreBoost ? 2 : 1; scoreBoost = false;
+        speed = 3; santaDistance = headStart ? 65 : 40; headStart = false;
+        frameCount = 0; spawnTimer = 0; coinSpawnTimer = 0; difficultyTimer = 0;
+        distance = 0; combo = 0; bestCombo = 0;
+        currentZone = 0; zoneTimer = 0; zoneTransition = 0;
+        powerUpSpawnTimer = 0; santaLaughTimer = 0;
+        activePowerUps = {};
+        obstacles.length = 0; coinItems.length = 0; powerUpItems.length = 0;
+        player.lane = 1; player.x = 400; player.y = 420;
+        player.jumping = false; player.jumpY = 0; player.jumpVel = 0;
+        player.sliding = false; player.slideTimer = 0;
+        player.alive = true; player.hitTimer = 0; player.bobTimer = 0;
+        shakeTimer = 0;
+        startMusic();
+    }
+
+    gameLoop();
+    </script>
+</body>
+</html>
