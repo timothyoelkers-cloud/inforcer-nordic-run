@@ -258,7 +258,7 @@
                     </div>
                     <div class="char-card" data-char="sam">
                         <canvas class="char-avatar" id="avatar-sam" width="100" height="120"></canvas>
-                        <h3>Silly Sailor Sam</h3>
+                        <h3>Viking Sailor Sam</h3>
                         <p>Nimble seafarer with quick reflexes. Fast but less stamina.</p>
                         <div class="char-stat"><span>Speed</span><div class="stat-bar"><div class="stat-fill" style="width:90%"></div></div></div>
                         <div class="char-stat"><span>Agility</span><div class="stat-bar"><div class="stat-fill" style="width:85%"></div></div></div>
@@ -348,6 +348,93 @@
     let wallet = loadData('wallet', 0);
     let leaderboard = loadData('leaderboard', []);
     let ownedItems = loadData('ownedItems', []);
+    let achievements = loadData('achievements', []); // unlocked achievement ids
+    let missionState = loadData('missionState', { date: '', missions: [] });
+    let totalRuns = loadData('totalRuns', 0);
+
+    // ---- Missions ----
+    const missionPool = [
+        { id: 'coin50', desc: 'Collect 50 coins in one run', target: 50, reward: 100, type: 'coins' },
+        { id: 'coin100', desc: 'Collect 100 coins in one run', target: 100, reward: 250, type: 'coins' },
+        { id: 'dist500', desc: 'Run 500 meters in one run', target: 500, reward: 100, type: 'distance' },
+        { id: 'dist1000', desc: 'Run 1000 meters in one run', target: 1000, reward: 300, type: 'distance' },
+        { id: 'combo10', desc: 'Get a 10-coin combo', target: 10, reward: 150, type: 'combo' },
+        { id: 'combo20', desc: 'Get a 20-coin combo', target: 20, reward: 300, type: 'combo' },
+        { id: 'survive60', desc: 'Survive 60 seconds', target: 60, reward: 150, type: 'time' },
+        { id: 'powerups3', desc: 'Collect 3 power-ups in one run', target: 3, reward: 200, type: 'powerups' },
+        { id: 'icecave', desc: 'Reach the Ice Cave', target: 1, reward: 200, type: 'zone1' },
+        { id: 'aurora', desc: 'Reach Aurora Peak', target: 1, reward: 500, type: 'zone3' },
+        { id: 'ult', desc: 'Use your ultimate ability', target: 1, reward: 100, type: 'ult' }
+    ];
+
+    function getTodayDate() { return new Date().toISOString().slice(0, 10); }
+    function refreshMissionsIfNeeded() {
+        const today = getTodayDate();
+        if (missionState.date !== today) {
+            // Pick 3 random missions
+            const shuffled = [...missionPool].sort(() => Math.random() - 0.5);
+            missionState = { date: today, missions: shuffled.slice(0, 3).map(m => ({ ...m, progress: 0, complete: false, claimed: false })) };
+            saveData('missionState', missionState);
+        }
+    }
+
+    function updateMissionProgress(type, value) {
+        let updated = false;
+        missionState.missions.forEach(m => {
+            if (m.complete || m.type !== type) return;
+            if (type === 'coins' || type === 'distance' || type === 'powerups') {
+                m.progress = Math.max(m.progress, value);
+            } else if (type === 'combo') {
+                m.progress = Math.max(m.progress, value);
+            } else if (type === 'time') {
+                m.progress = Math.max(m.progress, value);
+            } else if (type === 'zone1' || type === 'zone3' || type === 'ult') {
+                m.progress = 1;
+            }
+            if (m.progress >= m.target && !m.complete) {
+                m.complete = true;
+                updated = true;
+                showToast(`Mission Complete: ${m.desc} (+${m.reward} coins)`);
+            }
+        });
+        if (updated) saveData('missionState', missionState);
+    }
+
+    // ---- Achievements ----
+    const achievementsList = [
+        { id: 'first_run', name: 'First Steps', desc: 'Complete your first run', icon: '👟' },
+        { id: 'coins_500', name: 'Coin Collector', desc: 'Earn 500 coins total', icon: '💰' },
+        { id: 'coins_5000', name: 'Treasure Hunter', desc: 'Earn 5000 coins total', icon: '💎' },
+        { id: 'aurora', name: 'Mountain Climber', desc: 'Reach Aurora Peak', icon: '🏔️' },
+        { id: 'survivor', name: 'Survivor', desc: 'Survive 3 minutes', icon: '⏱️' },
+        { id: 'shopper', name: 'Big Spender', desc: 'Buy any shop item', icon: '🛒' },
+        { id: 'all_chars', name: 'Versatile', desc: 'Play as all 3 characters', icon: '🎭' },
+        { id: 'runs_10', name: 'Veteran', desc: 'Complete 10 runs', icon: '🏆' },
+        { id: 'no_hit', name: 'Untouchable', desc: 'Run 500m without getting hit', icon: '✨' },
+        { id: 'ult_master', name: 'Ultimate Master', desc: 'Use 5 ultimates total', icon: '⚡' }
+    ];
+    let usedChars = loadData('usedChars', []);
+    let totalUlts = loadData('totalUlts', 0);
+    let totalCoinsEarned = loadData('totalCoinsEarned', 0);
+    let runHitless = false;
+
+    function unlockAchievement(id) {
+        if (achievements.includes(id)) return;
+        achievements.push(id);
+        saveData('achievements', achievements);
+        const a = achievementsList.find(x => x.id === id);
+        if (a) showToast(`Achievement Unlocked: ${a.icon} ${a.name}`);
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toastContainer');
+        const div = document.createElement('div');
+        div.className = 'toast';
+        div.textContent = msg;
+        t.appendChild(div);
+        setTimeout(() => div.classList.add('show'), 10);
+        setTimeout(() => { div.classList.remove('show'); setTimeout(() => div.remove(), 500); }, 3500);
+    }
 
     // ---- Audio Engine ----
     let audioCtx = null;
@@ -486,7 +573,7 @@
     // ---- Characters ----
     const characters = {
         gower: { name: 'King Gower', bodyColor: '#cc2222', capeColor: '#880000', crownColor: '#ffcc00', hairColor: '#553300', skinColor: '#ffcc99', speedMod: 1.0, jumpMod: 1.0, slideMod: 1.0 },
-        sam: { name: 'Silly Sailor Sam', bodyColor: '#2255aa', capeColor: '#1a3a77', crownColor: '#ffffff', hairColor: '#ffaa00', skinColor: '#ffddaa', speedMod: 1.2, jumpMod: 1.1, slideMod: 0.9 },
+        sam: { name: 'Viking Sailor Sam', bodyColor: '#2255aa', capeColor: '#1a3a77', crownColor: '#ffffff', hairColor: '#ffaa00', skinColor: '#ffddaa', speedMod: 1.2, jumpMod: 1.1, slideMod: 0.9 },
         larsen: { name: 'Viking Larsen', bodyColor: '#665533', capeColor: '#554422', crownColor: '#888888', hairColor: '#cc8833', skinColor: '#eebb88', speedMod: 0.85, jumpMod: 0.9, slideMod: 1.2 }
     };
 
