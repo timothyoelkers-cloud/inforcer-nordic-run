@@ -221,6 +221,54 @@
         .controls-hint {
             position: absolute; bottom: 15px; color: #556688; font-size: 12px; text-align: center; width: 100%;
         }
+
+        /* Toast notifications */
+        #toastContainer {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 100;
+        }
+        .toast {
+            background: rgba(0, 80, 160, 0.9); color: #fff; padding: 10px 18px;
+            border-radius: 8px; border: 1px solid #00aaff; box-shadow: 0 0 15px rgba(0,150,255,0.4);
+            font-size: 13px; font-weight: bold; opacity: 0; transform: translateY(-10px);
+            transition: all 0.4s ease; white-space: nowrap;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        /* Ult meter */
+        #ultMeter {
+            position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%);
+            width: 240px; padding: 6px 14px; background: rgba(0,0,0,0.5);
+            border: 1px solid #335577; border-radius: 8px; display: none;
+        }
+        .ult-label { color: #88ccff; font-size: 11px; letter-spacing: 2px; text-align: center; margin-bottom: 4px; }
+        .ult-bar { width: 100%; height: 8px; background: #1a2744; border-radius: 4px; overflow: hidden; }
+        .ult-fill { height: 100%; background: linear-gradient(90deg, #00aaff, #ffcc00); border-radius: 4px; transition: width 0.2s; }
+        .ult-fill.ready { background: linear-gradient(90deg, #ffcc00, #ff8800, #ffcc00); animation: ultPulse 1s infinite; }
+        @keyframes ultPulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+        .ult-key { color: #ffcc00; font-size: 10px; text-align: center; margin-top: 2px; }
+
+        /* Missions/Achievements panel */
+        .panel-section { margin: 10px 0; }
+        .panel-section h3 { color: #88ccff; font-size: 16px; margin-bottom: 8px; letter-spacing: 2px; }
+        .mission-row, .ach-row {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(20,40,70,0.6); padding: 8px 12px; border-radius: 6px;
+            margin-bottom: 5px; border: 1px solid #2a4060; min-width: 480px;
+        }
+        .mission-row.complete, .ach-row.unlocked { border-color: #44ff88; background: rgba(20,80,60,0.4); }
+        .ach-row.locked { opacity: 0.4; }
+        .mission-icon { font-size: 22px; }
+        .mission-info { flex: 1; text-align: left; }
+        .mission-info .desc { color: #fff; font-size: 13px; }
+        .mission-info .progress-text { color: #88aacc; font-size: 11px; }
+        .progress-bar { width: 100%; height: 4px; background: #1a2744; border-radius: 2px; margin-top: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #44ff88; border-radius: 2px; }
+        .mission-reward { color: #ffcc00; font-size: 12px; font-weight: bold; }
+
+        /* Snowball */
+        .snowball-warning { animation: warnFlash 0.3s infinite; }
+        @keyframes warnFlash { 50% { opacity:0.5; } }
     </style>
 </head>
 <body>
@@ -238,9 +286,10 @@
                 <div class="btn-row" style="margin-top:4px;">
                     <button class="btn btn-small" id="shopBtn">Shop</button>
                     <button class="btn btn-small" id="lbBtn">Leaderboard</button>
+                    <button class="btn btn-small" id="missionsBtn">Missions</button>
                 </div>
                 <div class="controls-hint">
-                    Arrow Keys / WASD to move &bull; Space to jump &bull; Down to slide &bull; P to pause
+                    Arrow Keys / WASD to move &bull; Space to jump &bull; Down to slide &bull; <b>E for Ultimate</b> &bull; P to pause
                 </div>
             </div>
 
@@ -311,6 +360,30 @@
 
             <!-- Zone Announcement -->
             <div id="zoneAnnounce"></div>
+
+            <!-- Toast container -->
+            <div id="toastContainer"></div>
+
+            <!-- Ult meter -->
+            <div id="ultMeter">
+                <div class="ult-label" id="ultLabel">ULTIMATE</div>
+                <div class="ult-bar"><div class="ult-fill" id="ultFill" style="width:0%"></div></div>
+                <div class="ult-key">Press E to unleash</div>
+            </div>
+
+            <!-- Missions Screen -->
+            <div id="missionsScreen" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; flex-direction:column; align-items:center; justify-content:center; background: linear-gradient(180deg, #0b1628 0%, #1a2744 40%, #2d4a7a 100%); border-radius:12px; overflow-y:auto;">
+                <h2 style="color:#fff; font-size:32px; margin-bottom:20px; text-shadow:0 0 10px #00aaff;">Daily Missions & Achievements</h2>
+                <div class="panel-section">
+                    <h3>TODAY'S MISSIONS</h3>
+                    <div id="missionsList"></div>
+                </div>
+                <div class="panel-section">
+                    <h3>ACHIEVEMENTS</h3>
+                    <div id="achievementsList" style="max-height:200px; overflow-y:auto;"></div>
+                </div>
+                <button class="btn btn-small" id="missionsBackBtn">Back</button>
+            </div>
 
             <!-- Pause Overlay -->
             <div id="pauseOverlay">
@@ -540,6 +613,33 @@
     let zoneTransition = 0; // 0-1 blend
     let zoneTimer = 0;
     const ZONE_DURATION = 1800; // ~30s at 60fps
+
+    // ---- Snowballs (Santa's projectiles) ----
+    const snowballs = [];
+    let snowballSpawnTimer = 0;
+
+    // ---- Ultimate ----
+    let ultMeter = 0; // 0-100
+    let ultActive = false;
+    let ultTimer = 0;
+    let ultUsedThisRun = 0;
+    const ultDurations = { gower: 300, sam: 360, larsen: 240 };
+
+    // ---- Weather ----
+    let weatherTimer = 0;
+    let blizzardActive = false;
+    let blizzardDuration = 0;
+
+    // ---- Crates / Reindeer ----
+    const crates = []; // mystery crates
+    let crateSpawnTimer = 0;
+    let reindeerActive = false;
+    let reindeerTimer = 0;
+
+    // ---- Run-tracking for missions ----
+    let runPowerUpsCollected = 0;
+    let runStartTime = 0;
+    let runDistanceWithoutHit = 0;
 
     // ---- Power-ups ----
     const powerUpTypes = [
@@ -1002,6 +1102,110 @@
         ctx.globalAlpha = 1;
     }
 
+    // ---- Mystery Crates ----
+    function spawnCrate() {
+        const lane = Math.floor(Math.random() * 3);
+        crates.push({ lane, z: 0, collected: false });
+    }
+    function drawCrate(crate) {
+        const { y, laneCenter: lc, size: s, alpha } = getWorldPos(crate.z, crate.lane);
+        ctx.globalAlpha = alpha;
+        const bob = Math.sin(frameCount * 0.06) * s * 0.05;
+        ctx.save();
+        ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 10;
+        // Box
+        ctx.fillStyle = '#aa6622';
+        ctx.fillRect(lc - s*0.4, y - s*0.8 + bob, s*0.8, s*0.6);
+        // Lid stripes
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(lc - s*0.4, y - s*0.8 + bob, s*0.8, s*0.1);
+        ctx.fillRect(lc - s*0.05, y - s*0.8 + bob, s*0.1, s*0.6);
+        // Question mark
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${s*0.4}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('?', lc, y - s*0.5 + bob);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    }
+    function openCrate() {
+        const rolls = ['coins', 'powerup', 'ult', 'reindeer'];
+        const weights = [0.5, 0.25, 0.15, 0.1];
+        let r = Math.random(), acc = 0, pick = 'coins';
+        for (let i = 0; i < rolls.length; i++) { acc += weights[i]; if (r < acc) { pick = rolls[i]; break; } }
+        if (pick === 'coins') {
+            const amt = 25 + Math.floor(Math.random() * 50);
+            coins += amt; score += amt * multiplier * 5;
+            showToast(`Crate: +${amt} coins!`);
+        } else if (pick === 'powerup') {
+            const def = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            activePowerUps[def.type] = def.duration;
+            showToast(`Crate: ${def.desc} power-up!`);
+        } else if (pick === 'ult') {
+            ultMeter = 100;
+            showToast('Crate: Ultimate Charged!');
+        } else if (pick === 'reindeer') {
+            reindeerActive = true; reindeerTimer = 600;
+            showToast('Crate: Reindeer Mount! Ride free!');
+        }
+        sfxPowerup();
+    }
+
+    // ---- Snowballs ----
+    function spawnSnowball() {
+        const lane = Math.floor(Math.random() * 3);
+        snowballs.push({ lane, z: 0, vy: 0, warning: 30 });
+        showToast('⚠️ Incoming snowball!');
+    }
+    function drawSnowball(sb) {
+        const { y, laneCenter: lc, size: s, alpha } = getWorldPos(sb.z, sb.lane);
+        ctx.globalAlpha = alpha;
+        // Shadow on ground
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(lc, y, s*0.4, s*0.15, 0, 0, Math.PI*2); ctx.fill();
+        // Snowball with arc
+        const arcY = y - s * 1.2 - Math.sin((sb.z/100) * Math.PI) * 60;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(lc, arcY, s*0.35, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#cce0ff';
+        ctx.beginPath(); ctx.arc(lc - s*0.1, arcY - s*0.1, s*0.15, 0, Math.PI*2); ctx.fill();
+        // Warning marker on ground when close
+        if (sb.warning > 0) {
+            ctx.strokeStyle = `rgba(255,80,80,${0.6 + Math.sin(frameCount*0.3)*0.4})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(lc, y, s*0.6, 0, Math.PI*2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // ---- Reindeer overlay (drawn over player) ----
+    function drawReindeer() {
+        if (!reindeerActive) return;
+        const px = player.x, py = player.y - player.jumpY;
+        ctx.save();
+        ctx.translate(px, py + 25);
+        // Body
+        ctx.fillStyle = '#8a5a2a';
+        ctx.beginPath(); ctx.ellipse(0, 0, 35, 18, 0, 0, Math.PI*2); ctx.fill();
+        // Legs
+        ctx.fillStyle = '#5a3a1a';
+        const legBob = Math.sin(frameCount * 0.3) * 4;
+        ctx.fillRect(-25, 10, 5, 22 + legBob);
+        ctx.fillRect(-15, 10, 5, 22 - legBob);
+        ctx.fillRect(15, 10, 5, 22 - legBob);
+        ctx.fillRect(25, 10, 5, 22 + legBob);
+        // Head & antlers
+        ctx.fillStyle = '#8a5a2a';
+        ctx.beginPath(); ctx.arc(-30, -8, 10, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-32, -16); ctx.lineTo(-38, -28); ctx.moveTo(-38, -28); ctx.lineTo(-44, -25); ctx.moveTo(-38, -28); ctx.lineTo(-36, -36); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-28, -16); ctx.lineTo(-22, -28); ctx.moveTo(-22, -28); ctx.lineTo(-16, -25); ctx.moveTo(-22, -28); ctx.lineTo(-24, -36); ctx.stroke();
+        // Red nose
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff3333'; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(-38, -6, 3, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
     // ---- Snowflakes ----
     function drawSnowflakes() {
         ctx.fillStyle = 'rgba(220,235,255,0.7)';
@@ -1014,6 +1218,25 @@
     }
 
     // ---- Collision ----
+    function takeHit(reason) {
+        if (activePowerUps.shield > 0) { activePowerUps.shield = 0; shakeTimer = 4; return false; }
+        if (reindeerActive) { reindeerTimer = 0; reindeerActive = false; shakeTimer = 6; return false; }
+        if (ultActive && selectedChar === 'gower') { shakeTimer = 4; return false; } // invincibility
+        player.hitTimer = 20;
+        shakeTimer = 10;
+        santaDistance -= 15;
+        speed = Math.max(2, speed - 0.3);
+        combo = 0;
+        runDistanceWithoutHit = 0;
+        runHitless = false;
+        sfxHit();
+        if (santaDistance <= 0) {
+            if (extraLife) { extraLife = false; santaDistance = 30; showToast('Extra life used!'); }
+            else { gameOver(); return true; }
+        }
+        return true;
+    }
+
     function checkCollisions() {
         const playerZ = 85;
         obstacles.forEach(obs => {
@@ -1021,26 +1244,35 @@
             if (Math.abs(obs.z - playerZ) < 6 && obs.lane === player.lane) {
                 if (player.jumpY > 30) return;
                 if (player.sliding && obs.type === 'barrier') return;
-                obs.hit = true;
-                if (activePowerUps.shield > 0) {
-                    activePowerUps.shield = 0;
-                    shakeTimer = 4;
+                // Larsen ultimate: smash through obstacles
+                if (ultActive && selectedChar === 'larsen') {
+                    obs.hit = true;
+                    score += 25 * multiplier;
                     return;
                 }
-                player.hitTimer = 20;
-                shakeTimer = 10;
-                santaDistance -= 15;
-                speed = Math.max(2, speed - 0.3);
-                combo = 0;
-                sfxHit();
-                if (santaDistance <= 0) {
-                    if (extraLife) {
-                        extraLife = false;
-                        santaDistance = 30;
-                    } else {
-                        gameOver();
-                    }
-                }
+                obs.hit = true;
+                takeHit('obstacle');
+            }
+        });
+
+        // Snowballs
+        snowballs.forEach(sb => {
+            if (sb.collected) return;
+            if (Math.abs(sb.z - playerZ) < 6 && sb.lane === player.lane) {
+                // Jumping over snowball arc (it's mid-air for the middle of its arc)
+                const arcHeight = Math.sin((sb.z/100) * Math.PI) * 60;
+                if (player.jumpY > arcHeight + 10) return;
+                sb.collected = true;
+                takeHit('snowball');
+            }
+        });
+
+        // Crates
+        crates.forEach(crate => {
+            if (crate.collected) return;
+            if (Math.abs(crate.z - playerZ) < 6 && crate.lane === player.lane) {
+                crate.collected = true;
+                openCrate();
             }
         });
 
@@ -1055,6 +1287,7 @@
                 coins++; score += val * multiplier;
                 combo++;
                 if (combo > bestCombo) bestCombo = combo;
+                ultMeter = Math.min(100, ultMeter + 1.5);
                 sfxCoin();
             }
         });
@@ -1081,8 +1314,31 @@
         sfxGameOver();
         stopMusic();
 
-        // Add to wallet
-        wallet += coins;
+        // Hide ult meter
+        document.getElementById('ultMeter').style.display = 'none';
+
+        // Claim mission rewards
+        let missionRewards = 0;
+        missionState.missions.forEach(m => {
+            if (m.complete && !m.claimed) { m.claimed = true; missionRewards += m.reward; }
+        });
+        if (missionRewards > 0) { showToast(`Mission rewards: +${missionRewards} coins`); }
+        saveData('missionState', missionState);
+
+        // Total runs achievement tracking
+        totalRuns++;
+        saveData('totalRuns', totalRuns);
+        if (!achievements.includes('first_run')) unlockAchievement('first_run');
+        if (totalRuns >= 10) unlockAchievement('runs_10');
+
+        // Track total coins
+        totalCoinsEarned += coins;
+        saveData('totalCoinsEarned', totalCoinsEarned);
+        if (totalCoinsEarned >= 500) unlockAchievement('coins_500');
+        if (totalCoinsEarned >= 5000) unlockAchievement('coins_5000');
+
+        // Add to wallet (coins + mission rewards)
+        wallet += coins + missionRewards;
         saveData('wallet', wallet);
 
         // Save to leaderboard
@@ -1189,20 +1445,81 @@
 
         // Spawn power-ups
         powerUpSpawnTimer++;
-        if (powerUpSpawnTimer > 480) { spawnPowerUp(); powerUpSpawnTimer = 0; }
+        if (powerUpSpawnTimer > 480) { spawnPowerUp(); powerUpSpawnTimer = 0; runPowerUpsCollected++; updateMissionProgress('powerups', runPowerUpsCollected); }
+
+        // Spawn crates
+        crateSpawnTimer++;
+        if (crateSpawnTimer > 700) { spawnCrate(); crateSpawnTimer = 0; }
+
+        // Spawn snowballs - more frequent when Santa is close
+        snowballSpawnTimer++;
+        const snowballRate = santaDistance < 30 ? 240 : santaDistance < 60 ? 480 : 720;
+        if (snowballSpawnTimer > snowballRate && distance > 100) { spawnSnowball(); snowballSpawnTimer = 0; }
+
+        // Weather - blizzard
+        weatherTimer++;
+        if (!blizzardActive && weatherTimer > 1200 && Math.random() < 0.005 && currentZone >= 1) {
+            blizzardActive = true; blizzardDuration = 600;
+            showToast('❄️ Blizzard incoming!');
+        }
+        if (blizzardActive) {
+            blizzardDuration--;
+            if (blizzardDuration <= 0) { blizzardActive = false; weatherTimer = 0; }
+        }
+
+        // Reindeer mount
+        if (reindeerActive) {
+            reindeerTimer--;
+            if (reindeerTimer <= 0) { reindeerActive = false; showToast('Reindeer ride ended'); }
+        }
+
+        // Ultimate timer
+        if (ultActive) {
+            ultTimer--;
+            if (ultTimer <= 0) { ultActive = false; showToast('Ultimate ended'); }
+        }
+        // Build ult meter passively from distance
+        ultMeter = Math.min(100, ultMeter + 0.04);
 
         // Move objects - SLOWER
         const moveSpeed = speed * 0.4;
         obstacles.forEach(o => o.z += moveSpeed);
         coinItems.forEach(c => c.z += moveSpeed);
         powerUpItems.forEach(p => p.z += moveSpeed);
+        crates.forEach(c => c.z += moveSpeed);
+        snowballs.forEach(sb => { sb.z += moveSpeed * 1.4; if (sb.warning > 0) sb.warning--; });
+
+        // Move some obstacles between lanes (extra variety)
+        obstacles.forEach(o => {
+            if (o.type === 'barrier' || o.type === 'log') return;
+            if (o.z > 30 && o.z < 60 && !o.moved && Math.random() < 0.005) {
+                o.lane = (o.lane + (Math.random() < 0.5 ? 1 : 2)) % 3;
+                o.moved = true;
+            }
+        });
 
         // Cleanup
         for (let i = obstacles.length-1; i >= 0; i--) if (obstacles[i].z > 120) obstacles.splice(i,1);
         for (let i = coinItems.length-1; i >= 0; i--) if (coinItems[i].z > 120 || coinItems[i].collected) coinItems.splice(i,1);
         for (let i = powerUpItems.length-1; i >= 0; i--) if (powerUpItems[i].z > 120 || powerUpItems[i].collected) powerUpItems.splice(i,1);
+        for (let i = crates.length-1; i >= 0; i--) if (crates[i].z > 120 || crates[i].collected) crates.splice(i,1);
+        for (let i = snowballs.length-1; i >= 0; i--) if (snowballs[i].z > 120 || snowballs[i].collected) snowballs.splice(i,1);
 
         checkCollisions();
+
+        // Mission tracking
+        runDistanceWithoutHit += speed * 0.02;
+        updateMissionProgress('coins', coins);
+        updateMissionProgress('distance', Math.floor(distance));
+        updateMissionProgress('combo', combo);
+        updateMissionProgress('time', Math.floor((Date.now() - runStartTime) / 1000));
+        if (currentZone >= 1) updateMissionProgress('zone1', 1);
+        if (currentZone >= 3) updateMissionProgress('zone3', 1);
+
+        // Achievement triggers
+        if (Math.floor(distance) >= 500 && runHitless && !achievements.includes('no_hit')) unlockAchievement('no_hit');
+        if (Math.floor((Date.now() - runStartTime) / 1000) >= 180 && !achievements.includes('survivor')) unlockAchievement('survivor');
+        if (currentZone >= 3 && !achievements.includes('aurora')) unlockAchievement('aurora');
 
         // Update HUD
         document.getElementById('scoreDisplay').textContent = score;
@@ -1213,6 +1530,12 @@
         document.getElementById('zoneLabel').textContent = zones[currentZone].name;
         document.getElementById('comboDisplay').textContent = combo > 2 ? `Combo x${combo}` : '';
         updatePowerUpHUD();
+
+        // Ult meter HUD
+        const ultBar = document.getElementById('ultFill');
+        ultBar.style.width = ultMeter + '%';
+        ultBar.classList.toggle('ready', ultMeter >= 100 && !ultActive);
+        document.getElementById('ultLabel').textContent = ultActive ? 'ULTIMATE ACTIVE' : (ultMeter >= 100 ? 'ULTIMATE READY' : 'ULTIMATE');
     }
 
     // ---- Zone announcement ----
@@ -1232,10 +1555,39 @@
             drawRoad();
             coinItems.forEach(c => { if (!c.collected) drawCoin(c); });
             powerUpItems.forEach(p => { if (!p.collected) drawPowerUp(p); });
+            crates.forEach(c => { if (!c.collected) drawCrate(c); });
             obstacles.forEach(o => drawObstacle(o));
-            if (player.alive || gameState === 'gameover') drawPlayer();
+            snowballs.forEach(sb => { if (!sb.collected) drawSnowball(sb); });
+            if (player.alive || gameState === 'gameover') {
+                // Ultimate visual aura
+                if (ultActive) {
+                    ctx.save();
+                    const auraColor = selectedChar === 'gower' ? '#ffcc00' : selectedChar === 'sam' ? '#00ddff' : '#ff6622';
+                    ctx.shadowColor = auraColor; ctx.shadowBlur = 25;
+                    ctx.strokeStyle = auraColor;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y - player.jumpY - 10, 40 + Math.sin(frameCount*0.2)*5, 0, Math.PI*2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                drawPlayer();
+                drawReindeer();
+            }
             drawSanta();
             drawSnowflakes();
+            // Blizzard overlay
+            if (blizzardActive) {
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(0, 0, W, H);
+                // Extra wind streaks
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+                for (let i = 0; i < 30; i++) {
+                    const sx = (frameCount * 8 + i * 47) % (W + 100) - 50;
+                    const sy = (i * 19) % H;
+                    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 30, sy + 5); ctx.stroke();
+                }
+            }
             const vignette = ctx.createRadialGradient(400,300,200,400,300,500);
             vignette.addColorStop(0,'transparent'); vignette.addColorStop(1,'rgba(0,0,0,0.4)');
             ctx.fillStyle = vignette; ctx.fillRect(0,0,W,H);
@@ -1260,10 +1612,33 @@
             case 'ArrowLeft': case 'a': case 'A': if (player.lane > 0) player.lane--; break;
             case 'ArrowRight': case 'd': case 'D': if (player.lane < 2) player.lane++; break;
             case 'ArrowUp': case 'w': case 'W': case ' ':
-                if (!player.jumping && !player.sliding) { player.jumping = true; player.jumpVel = 15 * characters[selectedChar].jumpMod; sfxJump(); }
+                if (!player.jumping && !player.sliding) {
+                    player.jumping = true; player.jumpVel = 15 * characters[selectedChar].jumpMod;
+                    player.canDoubleJump = ultActive && selectedChar === 'sam';
+                    sfxJump();
+                } else if (player.jumping && player.canDoubleJump) {
+                    player.jumpVel = 13;
+                    player.canDoubleJump = false;
+                    sfxJump();
+                }
                 e.preventDefault(); break;
             case 'ArrowDown': case 's': case 'S':
                 if (!player.jumping && !player.sliding) { player.sliding = true; player.slideTimer = 30 * characters[selectedChar].slideMod; sfxSlide(); }
+                break;
+            case 'e': case 'E':
+                if (ultMeter >= 100 && !ultActive) {
+                    ultActive = true;
+                    ultTimer = ultDurations[selectedChar] || 300;
+                    ultMeter = 0;
+                    ultUsedThisRun++;
+                    totalUlts++;
+                    saveData('totalUlts', totalUlts);
+                    if (totalUlts >= 5) unlockAchievement('ult_master');
+                    updateMissionProgress('ult', 1);
+                    const names = { gower: 'INVINCIBILITY!', sam: 'DOUBLE JUMP!', larsen: 'SMASH MODE!' };
+                    showToast(`⚡ ${names[selectedChar]}`);
+                    sfxPowerup();
+                }
                 break;
         }
     });
@@ -1311,6 +1686,7 @@
         if (item.id === 'headstart') headStart = true;
         if (item.id === 'scoreboost') scoreBoost = true;
         if (item.id === 'extralife') extraLife = true;
+        unlockAchievement('shopper');
         renderShop();
     }
 
@@ -1355,6 +1731,48 @@
         document.getElementById('leaderboardScreen').style.display = 'none';
         document.getElementById('titleScreen').style.display = 'flex';
     });
+    document.getElementById('missionsBtn').addEventListener('click', () => {
+        document.getElementById('titleScreen').style.display = 'none';
+        document.getElementById('missionsScreen').style.display = 'flex';
+        renderMissions();
+    });
+    document.getElementById('missionsBackBtn').addEventListener('click', () => {
+        document.getElementById('missionsScreen').style.display = 'none';
+        document.getElementById('titleScreen').style.display = 'flex';
+    });
+
+    function renderMissions() {
+        refreshMissionsIfNeeded();
+        const list = document.getElementById('missionsList');
+        list.innerHTML = '';
+        missionState.missions.forEach(m => {
+            const pct = Math.min(100, (m.progress / m.target) * 100);
+            const row = document.createElement('div');
+            row.className = 'mission-row' + (m.complete ? ' complete' : '');
+            row.innerHTML = `<div class="mission-icon">${m.complete ? '✅' : '🎯'}</div>
+                <div class="mission-info">
+                    <div class="desc">${m.desc}</div>
+                    <div class="progress-text">${Math.min(m.progress, m.target)} / ${m.target}</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                </div>
+                <div class="mission-reward">+${m.reward}</div>`;
+            list.appendChild(row);
+        });
+        const achList = document.getElementById('achievementsList');
+        achList.innerHTML = '';
+        achievementsList.forEach(a => {
+            const unlocked = achievements.includes(a.id);
+            const row = document.createElement('div');
+            row.className = 'ach-row ' + (unlocked ? 'unlocked' : 'locked');
+            row.innerHTML = `<div class="mission-icon">${a.icon}</div>
+                <div class="mission-info">
+                    <div class="desc">${a.name}</div>
+                    <div class="progress-text">${a.desc}</div>
+                </div>
+                <div class="mission-reward">${unlocked ? 'Unlocked' : 'Locked'}</div>`;
+            achList.appendChild(row);
+        });
+    }
 
     document.querySelectorAll('.char-card').forEach(card => {
         card.addEventListener('click', () => {
@@ -1378,10 +1796,12 @@
     });
 
     function startGame() {
+        refreshMissionsIfNeeded();
         document.getElementById('charSelect').style.display = 'none';
         document.getElementById('gameOver').style.display = 'none';
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('pauseOverlay').style.display = 'none';
+        document.getElementById('ultMeter').style.display = 'block';
         gameState = 'playing'; paused = false;
         score = 0; coins = 0; multiplier = scoreBoost ? 2 : 1; scoreBoost = false;
         speed = 3; santaDistance = headStart ? 65 : 40; headStart = false;
@@ -1389,13 +1809,26 @@
         distance = 0; combo = 0; bestCombo = 0;
         currentZone = 0; zoneTimer = 0; zoneTransition = 0;
         powerUpSpawnTimer = 0; santaLaughTimer = 0;
+        crateSpawnTimer = 0; snowballSpawnTimer = 0;
+        weatherTimer = 0; blizzardActive = false; blizzardDuration = 0;
+        reindeerActive = false; reindeerTimer = 0;
+        ultMeter = 0; ultActive = false; ultTimer = 0; ultUsedThisRun = 0;
+        runPowerUpsCollected = 0; runStartTime = Date.now();
+        runDistanceWithoutHit = 0; runHitless = true;
         activePowerUps = {};
         obstacles.length = 0; coinItems.length = 0; powerUpItems.length = 0;
+        crates.length = 0; snowballs.length = 0;
         player.lane = 1; player.x = 400; player.y = 420;
         player.jumping = false; player.jumpY = 0; player.jumpVel = 0;
-        player.sliding = false; player.slideTimer = 0;
+        player.sliding = false; player.slideTimer = 0; player.canDoubleJump = false;
         player.alive = true; player.hitTimer = 0; player.bobTimer = 0;
         shakeTimer = 0;
+        // Track character usage for achievement
+        if (!usedChars.includes(selectedChar)) {
+            usedChars.push(selectedChar);
+            saveData('usedChars', usedChars);
+            if (usedChars.length >= 3) unlockAchievement('all_chars');
+        }
         startMusic();
     }
 
